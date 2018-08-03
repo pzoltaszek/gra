@@ -74,4 +74,5 @@ color: greenyellow;
 
 .ball {
     background: rgb(34, 13, 224); 
+    border-radius: 5px;
 }

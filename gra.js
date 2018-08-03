@@ -127,7 +127,7 @@ class Ball {
       return new Ball(pos, new Vec(5, 0));
    }
 }
-Ball.prototype.size = new Vec(0.7, 0.7);
+Ball.prototype.size = new Vec(0.5, 0.5);
 
 // konstruktor Lavy | lava pionowa, = lava pozioma, v lava kapiaca
 
