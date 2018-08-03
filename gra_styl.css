@@ -30,9 +30,10 @@ body {
 }
 
 .bonus { 
-    background: green; 
+    background: url("./heart.jpg"); 
     border-radius: 8px;
 }
+
 
 .player { 
     background: rgb(64, 64, 64);   
@@ -51,6 +52,10 @@ body {
     max-width: 1000px;
     max-height: 800px;
     position: relative;
+}
+
+.hidden {
+    background-image: url("./hidden.jpg");
 }
 
 #textArea {

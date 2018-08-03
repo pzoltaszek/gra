@@ -1,9 +1,9 @@
 
-let GAME_LEVELS = [
-/*`
-......................
+let GAME_LEVELS = [/*
+`
+b.....................
 ..#................#..
-..#..............=.#..
+..##.............=.#..
 ..#.........o.o....#..
 ..#.@......#####...#..
 ..#####............#..
@@ -18,13 +18,13 @@ let GAME_LEVELS = [
 #............o.o............................................#
 #..........#######..........................................#
 #........................o..................................#
-#.......................#####...............................#
-#...........................................................#
+#.......................#####...............#..M.......#....#
+#............................................##########....##
 #...o.............................o.........................#
-#.#####.........................######.......#.M.#.........x#
-#.................................v..........#####........###
+#.#####.........................######.......#...#.........x#
+#.................................v..........#####.........##
 #........................................|...o..............#
-#..........................................#..M.#.M..#...@..#
+#..........................................#......M..#...@..#
 #..........................................##################
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++#
 #############################################################
@@ -49,7 +49,7 @@ class Level {
       });
     }
   }
-// Konstruktor stanu gry (staan bedzie dpowiedzialny za np jak zbiore monety to znikaja)
+// Konstruktor stanu gry (stan jest dpowiedzialny za ciagly update widoku)
 
 class State {
 constructor(level, actors, status) {
@@ -67,7 +67,7 @@ constructor(level, actors, status) {
     }
 }
 
-  //vector z dodawaniem i mnozeniem przez faktor
+  //vector z dodawaniem i mnozeniem przez faktor, uzywany jako pozycja i predkosc
 
 class Vec {
     constructor(x, y) {
@@ -129,7 +129,8 @@ class Ball {
 }
 Ball.prototype.size = new Vec(0.5, 0.5);
 
-// konstruktor Lavy | lava pionowa, = lava pozioma, v lava kapiaca
+// konstruktor Lavy | lava pionowa, = lava pozioma, v lava kapiaca. Lava stojaca (+) nie jest uznawana za aktora 
+// bo sie nie rusza
 
 class Lava {
     constructor(pos, speed, reset) {
@@ -174,24 +175,39 @@ class Coin {
 Coin.prototype.size = new Vec(0.6, 0.6);
 
 class Bonus {
-  constructor(pos) {
+  constructor(pos, size) {
     this.pos = pos;
+    this.size = size;
   }
 
   get type() { return "bonus"; }
 
-  static create(pos) {
-    return new Bonus(pos.plus(new Vec(0.2, 0.1)));
+  static create(pos, size) {
+    return new Bonus(pos.plus(new Vec(0.2, 0.1)), new Vec(0.8, 0.8));
   }
 }
 
-Bonus.prototype.size = new Vec(0.8, 0.8);
+//Bonus.prototype.size = new Vec(0.8, 0.8);
+
+class Hidden {
+  constructor(pos) {
+    this.pos = pos;
+  }
+
+  get type() { return "hidden"; }
+
+  static create(pos) {
+    return new Hidden(pos);
+  }
+}
+
+Hidden.prototype.size = new Vec(1, 1);
 
 // typy blokow
 
 const levelChars = {
     ".": "empty", "#": "wall", "+": "lava",
-    "@": Player, "o": Coin, "x": Bonus, "M": Monster, "b": Ball,
+    "@": Player, "o": Coin, "x": Bonus, "M": Monster, "b": Ball, "?": Hidden,
     "=": Lava, "|": Lava, "v": Lava
 };
 
@@ -318,16 +334,20 @@ State.prototype.update = function(time, keys) {
     // jesli nie ma co dalej robic  wygrana
     if (newState.status != "playing") return newState;
   
-    // player dotyka lavy  - przegrywa
+    // player dotyka lavy stojacej (+) - przegrywa
     let player = newState.player;
     if (this.level.touches(player.pos, player.size, "lava")) {
-		  --lives;
-      message(`Lives:  ${lives}`);
+		//  --lives;
+     // message(`Lives:  ${lives}`);
+     checkingLives();
       return new State(this.level, actors, "lost");
     }
    
     // sprawdzanie czy aktorzy (rozni) na siebie nachodza: player - lava  = lost, ale player - coin = zbieranie monet
     for (let actor of actors) {
+      if (movingBall ==true && actor.type == "ball") {
+      return actor.collideWithEnemy(newState);
+      }
       if (actor != player && overlap(actor, player)) {
         newState = actor.collide(newState);
       }
@@ -347,8 +367,10 @@ function overlap(actor1, actor2) {
 // zmiana statusu jak aktorzy is dotykaja. 1 lava-player, 2. coin-player
 
 Lava.prototype.collide = function(state) {
-  --lives;
-  message(`Lives:  ${lives}`);
+  //player dotyka lawy ruszajacej sie
+ // --lives;
+ // message(`Lives:  ${lives}`);
+ checkingLives();
     return new State(state.level, state.actors, "lost");
 };
   
@@ -363,9 +385,22 @@ Coin.prototype.collide = function(state) {
 Bonus.prototype.collide = function(state) {
   let filtered = state.actors.filter(a => a != this);
   let status = state.status;
-  jumpSpeed = 25;
-  playerXSpeed = 20;
+  lives = lives +2;
+  checkingLives();
   return new State(state.level, filtered, state.status);
+};
+
+Hidden.prototype.collide = function(state) {
+  let playerPos = state.player.pos.y + 0.51;
+  if (playerPos > this.pos.y) {
+    let a = document.getElementsByClassName("hidden");   
+    //a.style.background = "red";
+    //document.getElementById("aaa").style.backgroundImage = "url('./wall.jpg')";
+    let filtered = state.actors.filter(a => a != this);
+    return new State(state.level, filtered, state.status);
+  } else {
+    return state;
+  }
 };
 
 Monster.prototype.collide = function(state) {
@@ -375,13 +410,33 @@ Monster.prototype.collide = function(state) {
     let filtered = state.actors.filter(a => a != this);
     return new State(state.level, filtered, state.status);
   } else {
+    checkingLives();
     return new State(state.level, state.actors, "lost");
   }
 };
-
+// kolizja balla z playerem
 Ball.prototype.collide = function(state) {
   return state;
 };
+
+// kolizja balla z przeciwnikiem
+Ball.prototype.collideWithEnemy = function (state) {
+  let enemies = state.actors.filter(a => a.type == "monster");
+  for(let enemy of enemies) {
+    if (enemy.pos.x < this.pos.x + 0.1 && enemy.pos.x > this.pos.x -0.1 && enemy.pos.y < this.pos.y +0.1 && enemy.pos.y > this.pos.y -0.1) {
+      console.log("trafiony");
+      //znika przeciwnik
+      let filtered = state.actors.filter(a =>  a != enemy);
+      // znika kula
+      movingBall = false;
+     // let filtered = state.actors.filter(a => a != this);
+      return new State(state.level, filtered, state.status);
+    }
+   }
+   return state;    
+}
+
+// *************************** UPDATE Aktorow*******************************
 
 // update lawy
 
@@ -410,7 +465,12 @@ Coin.prototype.update = function(time) {
 };
 
 Bonus.prototype.update = function(time) {
-  return new Bonus(this.pos);
+  // TODO zwiekszajacy sie rozmiar = bijace serce
+  return new Bonus(this.pos, this.size);
+};
+
+Hidden.prototype.update = function(time) {
+  return new Hidden(this.pos);
 };
 
 // poruszanie sie monstera
@@ -419,12 +479,14 @@ Monster.prototype.update = function(time, state) {
   let newPos = this.pos.plus(this.speed.times(time));
     if (!state.level.touches(newPos, this.size, "wall")) {
       return new Monster(newPos, this.speed);
-      // jesli jest wall na drodze, to lava wraca do poczatku => reset = pos - to dla lavy kapiacej
+      // jesli jest wall na drodze, to monstera odbija sie
     } else {
       return new Monster(this.pos, this.speed.times(-1));
     } 
 }
 var movingBall = false;
+var directionBallRight = true;
+let ballSpeed = 400;
 
 Ball.prototype.update = function(time, state) {
   //let startPos = state.player.pos;
@@ -432,16 +494,16 @@ Ball.prototype.update = function(time, state) {
   //jesli flaga jest false. Ball "chodzi" za playerem
   if(!movingBall){
     let newPos = state.player.pos.plus(this.speed.times(time));
-    return new Ball(newPos, this.speed.times(time));
+    return new Ball(newPos.plus(new Vec(0, 0.5)), this.speed.times(time));
   // jesli falga zmieni sie na true (po nacisnieciu spacji) to kula zaczyna sie ruszac
   } else if(movingBall){
     let newPosWhenRun = this.pos.plus(this.speed.times(time));
-    // dopoki nie uderzy w sciane to aktualizuje pozycje i leci do przodu
+    // dopoki nie uderzy w sciane to aktualizuje pozycje i leci do przodu w prawo albolewo
     if (!state.level.touches(newPosWhenRun, this.size, "wall")) {
-      if(playerFacedRight) {
-        return new Ball(newPosWhenRun, (new Vec (300,0).times(time)));  
-      } else if(!playerFacedRight) {
-        return new Ball(newPosWhenRun, (new Vec (300,0).times(-time)));  
+      if(directionBallRight) {
+        return new Ball(newPosWhenRun, (new Vec (ballSpeed,0).times(time)));  
+      } else if(!directionBallRight) {
+        return new Ball(newPosWhenRun, (new Vec (ballSpeed,0).times(-time)));  
       }        
     // jak uderzy w sciane to znika i przyjmuje pozycje jak player. Flaga ruchu wraca na false  
     } else {
@@ -456,6 +518,8 @@ function isSpacepressed() {
   document.addEventListener('keyup', function(event) {
     if (event.key == " ") {
       event.preventDefault();
+      if (playerFacedRight) {directionBallRight = true;}
+      else if (!playerFacedRight) {directionBallRight = false;}
       movingBall = true;
       return true;
     }
@@ -468,7 +532,6 @@ function isSpacepressed() {
 let playerXSpeed = 7;
 let gravity = 30;
 let jumpSpeed = 17;
-let ballSpeed = 25;
 let playerFacedRight = true;
 
 Player.prototype.update = function(time, state, keys) {
@@ -567,7 +630,8 @@ async function runGame(plans, Display) {
                                     Display);
         if (status == "won") level++;
       }
-      console.log("You've won!");
+      confirm("You've won!");
+      window.location.replace("./index.html");
 }
 function createMessage(){
   var div = document.createElement("div");
@@ -577,6 +641,16 @@ function createMessage(){
 function message(a){
   var g = document.getElementById("textArea");
   g.innerHTML = a;
+}
+
+function checkingLives() {
+  --lives;
+  message(`Lives:  ${lives}`);
+  if(lives === 0) {
+    confirm("game over");
+    document.body.remove();
+    window.location.replace("./index.html");
+  }
 }
 let lives = 3;
 
