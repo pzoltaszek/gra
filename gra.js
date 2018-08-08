@@ -1,4 +1,6 @@
+
 'use strict';
+
 let GAME_LEVELS = [/*
 `
 b.....................
