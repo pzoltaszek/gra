@@ -1,9 +1,9 @@
-
-let GAME_LEVELS = [
-/*`
-......................
+'use strict';
+let GAME_LEVELS = [/*
+`
+b.....................
 ..#................#..
-..#..............=.#..
+..##.............=.#..
 ..#.........o.o....#..
 ..#.@......#####...#..
 ..#####............#..
@@ -13,20 +13,20 @@ let GAME_LEVELS = [
 `
 ..................................................#......b..#
 #...........................................................#
-#...........................................=...............#
+#...........................................................#
 #...........................................................#
 #............o.o............................................#
 #..........#######..........................................#
 #........................o..................................#
-#.......................#####...............................#
-#...........................................................#
+#.......................#####...............#..M.......#....#
+#............................................##########.....#
 #...o.............................o.........................#
-#.#####.........................######.......#.M.#.........x#
-#.................................v..........#####........###
-#........................................|...o..............#
-#..........................................#..M.#.M..#...@..#
-#..........................................##################
-#+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++#
+#.#####.........................###......................?x##
+#.........................................................?##
+#...........................................................#
+#.....................................................#@.?..#
+#.................................#....._..#...._....########
+#+++++++++++++++++++++++++++++++++#........#........##++++++#
 #############################################################
 `];
 
@@ -49,7 +49,7 @@ class Level {
       });
     }
   }
-// Konstruktor stanu gry (staan bedzie dpowiedzialny za np jak zbiore monety to znikaja)
+// Konstruktor stanu gry (stan jest dpowiedzialny za ciagly update widoku)
 
 class State {
 constructor(level, actors, status) {
@@ -63,11 +63,11 @@ constructor(level, actors, status) {
     }
   
     get player() {
-      return this.actors.find(a => a.type == "player");
+      return this.actors.find(a => a.type == "player" );
     }
 }
 
-  //vector z dodawaniem i mnozeniem przez faktor
+  //vector z dodawaniem i mnozeniem przez faktor, uzywany jako pozycja i predkosc
 
 class Vec {
     constructor(x, y) {
@@ -89,7 +89,7 @@ class Player {
       this.speed = speed;
     }
   
-    get type() { return "player"; }
+    get type()  {return "player";}
   
     static create(pos) {
       return new Player(pos.plus(new Vec(0, -0.5)),
@@ -129,7 +129,8 @@ class Ball {
 }
 Ball.prototype.size = new Vec(0.5, 0.5);
 
-// konstruktor Lavy | lava pionowa, = lava pozioma, v lava kapiaca
+// konstruktor Lavy | lava pionowa, = lava pozioma, v lava kapiaca. Lava stojaca (+) nie jest uznawana za aktora 
+// bo sie nie rusza
 
 class Lava {
     constructor(pos, speed, reset) {
@@ -153,8 +154,26 @@ class Lava {
   
 Lava.prototype.size = new Vec(1, 1);
 
-// konstruktor coinsow. wobble = drganie
+// moving wall
 
+class MovingWall {
+  constructor(pos, speed, reset) {
+    this.pos = pos;
+    this.speed = speed;
+    this.reset = reset;
+  }
+
+  get type() { return "movingWall"; }
+
+  static create(pos, ch) {
+    if (ch == "_") return new MovingWall(pos, new Vec(5, 0));
+  }
+}
+
+MovingWall.prototype.size = new Vec(2, 1);
+
+
+// konstruktor coinsow. wobble = drganie
 class Coin {
     constructor(pos, basePos, wobble) {
       this.pos = pos;
@@ -162,7 +181,7 @@ class Coin {
       this.wobble = wobble;
     }
   
-    get type() { return "coin"; }
+    get type() {return "coin";}
   
     static create(pos) {
       let basePos = pos.plus(new Vec(0.2, 0.1));
@@ -174,24 +193,39 @@ class Coin {
 Coin.prototype.size = new Vec(0.6, 0.6);
 
 class Bonus {
-  constructor(pos) {
+  constructor(pos, size) {
     this.pos = pos;
+    this.size = size;
   }
 
   get type() { return "bonus"; }
 
-  static create(pos) {
-    return new Bonus(pos.plus(new Vec(0.2, 0.1)));
+  static create(pos, size) {
+    return new Bonus(pos.plus(new Vec(0.2, 0.1)), new Vec(0.8, 0.8));
   }
 }
 
-Bonus.prototype.size = new Vec(0.8, 0.8);
+//Bonus.prototype.size = new Vec(0.8, 0.8);
+
+class Hidden {
+  constructor(pos) {
+    this.pos = pos;
+  }
+
+  get type() { return "hidden"; }
+
+  static create(pos) {
+    return new Hidden(pos);
+  }
+}
+
+Hidden.prototype.size = new Vec(1, 1);
 
 // typy blokow
 
 const levelChars = {
-    ".": "empty", "#": "wall", "+": "lava",
-    "@": Player, "o": Coin, "x": Bonus, "M": Monster, "b": Ball,
+    ".": "empty", "#": "wall", "+": "lava", "_": MovingWall,
+    "@": Player, "o": Coin, "x": Bonus, "M": Monster, "b": Ball, "?": Hidden,
     "=": Lava, "|": Lava, "v": Lava
 };
 
@@ -289,7 +323,7 @@ DOMDisplay.prototype.scrollPlayerIntoView = function(state) {
 
 // ************* RUCH I KOLIZJE  ***********************
 
-// metoda sparawdzajaca czy element dotyka siatki elementow
+// metoda sparawdzajaca czy element (z listy level = nie aktor = sciana  i lava stojaca) dotyka siatki elementow
 
 Level.prototype.touches = function(pos, size, type) {
     var xStart = Math.floor(pos.x);
@@ -303,6 +337,7 @@ Level.prototype.touches = function(pos, size, type) {
                         y < 0 || y >= this.height;
         let here = isOutside ? "wall" : this.rows[y][x];
         if (here == type) return true;
+
       }
     }
     return false;
@@ -314,20 +349,23 @@ State.prototype.update = function(time, keys) {
     let actors = this.actors
       .map(actor => actor.update(time, this, keys));
     let newState = new State(this.level, actors, this.status);
-  
+    let player = newState.player;
     // jesli nie ma co dalej robic  wygrana
     if (newState.status != "playing") return newState;
-  
-    // player dotyka lavy  - przegrywa
-    let player = newState.player;
-    if (this.level.touches(player.pos, player.size, "lava")) {
-		  --lives;
-      message(`Lives:  ${lives}`);
+    
+    
+    // player dotyka lavy stojacej (+) - przegrywa
+    
+    if (this.level.touches(this.player.pos, this.player.size, "lava")) {
+     checkingLives();
       return new State(this.level, actors, "lost");
     }
    
     // sprawdzanie czy aktorzy (rozni) na siebie nachodza: player - lava  = lost, ale player - coin = zbieranie monet
     for (let actor of actors) {
+      if (movingBall ==true && actor.type == "ball") {
+      return actor.collideWithEnemy(newState);
+      }
       if (actor != player && overlap(actor, player)) {
         newState = actor.collide(newState);
       }
@@ -340,17 +378,31 @@ State.prototype.update = function(time, keys) {
 function overlap(actor1, actor2) {
     return actor1.pos.x + actor1.size.x > actor2.pos.x &&
            actor1.pos.x < actor2.pos.x + actor2.size.x &&
-           actor1.pos.y + actor1.size.y > actor2.pos.y &&
-           actor1.pos.y < actor2.pos.y + actor2.size.y;
+           actor1.pos.y + actor1.size.y >= actor2.pos.y &&
+           actor1.pos.y <= actor2.pos.y + actor2.size.y;
 }
 
-// zmiana statusu jak aktorzy is dotykaja. 1 lava-player, 2. coin-player
+//funkcja pomocnicza. Overlap przyjmuje 2 aktorow, wiec zeby ja wykorzystac musialbym czasami tworzyc nowe instacje
+// overlap2 przyjmuje pos i size zamiast obiektu, przez co latwiej cos do niej przekazac.
+function overlap2(pos, size, actor2) {
+  return pos.x + size.x > actor2.pos.x &&
+         pos.x < actor2.pos.x + actor2.size.x &&
+         pos.y + size.y >= actor2.pos.y &&
+         pos.y <= actor2.pos.y + actor2.size.y;
+}
+
+
+// zmiana statusu jak aktorzy sie dotykaja. 1 lava-player, 2. coin-player
 
 Lava.prototype.collide = function(state) {
-  --lives;
-  message(`Lives:  ${lives}`);
+ checkingLives();
     return new State(state.level, state.actors, "lost");
 };
+
+//cala logika kolidacji z movingwall jest w ruchu playera
+MovingWall.prototype.collide = function(state) {
+    return state;
+ };
   
 Coin.prototype.collide = function(state) {
     let filtered = state.actors.filter(a => a != this);
@@ -358,14 +410,30 @@ Coin.prototype.collide = function(state) {
     // jesli nie znajdze wsrod aktorow coina to znaczy ze ich wiecej nie ma i status zmienia na won
     if (!filtered.some(a => a.type == "coin")) status = "won";
     return new State(state.level, filtered, status);
+  return state;
 };
 
 Bonus.prototype.collide = function(state) {
   let filtered = state.actors.filter(a => a != this);
   let status = state.status;
-  jumpSpeed = 25;
-  playerXSpeed = 20;
+  lives = lives +2;
+  checkingLives();
   return new State(state.level, filtered, state.status);
+};
+
+Hidden.prototype.collide = function(state) {
+  let playerPosY = state.player.pos.y;
+  let playerPosX = state.player.pos.x;
+  if (playerPosY > this.pos.y && ((playerPosX > this.pos.x + 0.01)||(playerPosX < this.pos.x - 0.01))) {
+    let filtered = state.actors.filter(a => a != this);
+    return new State(state.level, filtered, state.status);
+  } else if (playerPosY < this.pos.y) {
+    state.player.pos.y = this.pos.y - state.player.size.y;
+    return state;
+  }     
+  else {
+    return state;
+  }
 };
 
 Monster.prototype.collide = function(state) {
@@ -375,13 +443,31 @@ Monster.prototype.collide = function(state) {
     let filtered = state.actors.filter(a => a != this);
     return new State(state.level, filtered, state.status);
   } else {
+    checkingLives();
     return new State(state.level, state.actors, "lost");
   }
 };
-
+// kolizja balla z playerem
 Ball.prototype.collide = function(state) {
   return state;
 };
+
+// kolizja balla z przeciwnikiem
+Ball.prototype.collideWithEnemy = function (state) {
+  let enemies = state.actors.filter(a => a.type == "monster");
+  for(let enemy of enemies) {
+    if (overlap(this, enemy)) {
+      //znika przeciwnik
+      let filtered = state.actors.filter(a =>  a != enemy);
+      // znika kula
+      movingBall = false;
+      return new State(state.level, filtered, state.status);
+    }
+   }
+   return state;    
+}
+
+// *************************** UPDATE Aktorow*******************************
 
 // update lawy
 
@@ -390,13 +476,29 @@ Lava.prototype.update = function(time, state) {
     //dopoki lava nie dotknie walla to tworzy nowa lave w newPos. Reset to pozycja po zresetowaniu, docelowo = newPos
     if (!state.level.touches(newPos, this.size, "wall")) {
       return new Lava(newPos, this.speed, this.reset);
-      // jesli jest wall na drodze, to lava wraca do poczatku => reset = pos - to dla lavy kapiacej
+      // jesli jest wall na drodze, i jesli jest reset(konstruktor dopuszcza lawe bez tego param) 
+      //to lava wraca do poczatku => reset = pos - to dla lavy kapiacej
     } else if (this.reset) {
       return new Lava(this.reset, this.speed, this.reset);
       // to przypadek dla lawy 'odbijajacej sie', zmieniamy jej predkosc na ujemna czyli zaczyna sie cofac az znowu uderzy w wall
     } else {
       return new Lava(this.pos, this.speed.times(-1));
     }
+};
+
+let movingWallRight = false;
+MovingWall.prototype.update = function(time, state) {
+  let newPos = this.pos.plus(this.speed.times(time));
+  if (this.speed.x > 0) movingWallRight = true;
+  if (this.speed.x < 0) movingWallRight = false;
+  //dopoki wall nie dotknie innego walla to tworzy nowy wall w newPos. Reset to pozycja po zresetowaniu, docelowo = newPos
+  if (!state.level.touches(newPos, this.size, "wall")) {
+    return new MovingWall(newPos, this.speed, this.reset);  
+    // jesli jest wall na drodze, to lava wraca do poczatku => reset = pos - to dla lavy kapiacej
+  } else {
+    return new MovingWall(newPos, this.speed.times(-1));
+    
+  }
 };
 
 // poruszanie sie coinsow - podskakiwanie
@@ -410,7 +512,12 @@ Coin.prototype.update = function(time) {
 };
 
 Bonus.prototype.update = function(time) {
-  return new Bonus(this.pos);
+  // TODO zwiekszajacy sie rozmiar = bijace serce
+  return new Bonus(this.pos, this.size);
+};
+
+Hidden.prototype.update = function(time) {
+  return new Hidden(this.pos);
 };
 
 // poruszanie sie monstera
@@ -419,29 +526,31 @@ Monster.prototype.update = function(time, state) {
   let newPos = this.pos.plus(this.speed.times(time));
     if (!state.level.touches(newPos, this.size, "wall")) {
       return new Monster(newPos, this.speed);
-      // jesli jest wall na drodze, to lava wraca do poczatku => reset = pos - to dla lavy kapiacej
+      // jesli jest wall na drodze, to monstera odbija sie
     } else {
       return new Monster(this.pos, this.speed.times(-1));
     } 
 }
-var movingBall = false;
+var movingBall;
+var directionBallRight;
+let ballSpeed = 400;
 
 Ball.prototype.update = function(time, state) {
-  //let startPos = state.player.pos;
   if (isSpacepressed()) movingBall = true;
   //jesli flaga jest false. Ball "chodzi" za playerem
+  
   if(!movingBall){
-    let newPos = state.player.pos.plus(this.speed.times(time));
-    return new Ball(newPos, this.speed.times(time));
+    let newPos = state.player.pos.plus(this.speed.times(time));   
+    return new Ball(newPos.plus(new Vec(0, 0.5)), this.speed.times(time));
   // jesli falga zmieni sie na true (po nacisnieciu spacji) to kula zaczyna sie ruszac
   } else if(movingBall){
     let newPosWhenRun = this.pos.plus(this.speed.times(time));
-    // dopoki nie uderzy w sciane to aktualizuje pozycje i leci do przodu
+    // dopoki nie uderzy w sciane to aktualizuje pozycje i leci do przodu w prawo albolewo
     if (!state.level.touches(newPosWhenRun, this.size, "wall")) {
-      if(playerFacedRight) {
-        return new Ball(newPosWhenRun, (new Vec (300,0).times(time)));  
-      } else if(!playerFacedRight) {
-        return new Ball(newPosWhenRun, (new Vec (300,0).times(-time)));  
+      if(directionBallRight) {       
+        return new Ball(newPosWhenRun, (new Vec (ballSpeed,0).times(time)));  
+      } else if(!directionBallRight) {
+        return new Ball(newPosWhenRun, (new Vec (ballSpeed,0).times(-time)));  
       }        
     // jak uderzy w sciane to znika i przyjmuje pozycje jak player. Flaga ruchu wraca na false  
     } else {
@@ -456,6 +565,8 @@ function isSpacepressed() {
   document.addEventListener('keyup', function(event) {
     if (event.key == " ") {
       event.preventDefault();
+      if (playerFacedRight) {directionBallRight = true;}
+      else if (!playerFacedRight) {directionBallRight = false;}
       movingBall = true;
       return true;
     }
@@ -468,38 +579,58 @@ function isSpacepressed() {
 let playerXSpeed = 7;
 let gravity = 30;
 let jumpSpeed = 17;
-let ballSpeed = 25;
 let playerFacedRight = true;
 
 Player.prototype.update = function(time, state, keys) {
+  // TO DO jestproblem, bo biore pod uwqage tylko jeden moving wall - pierwszy, a nie wszystkie
+  let movingWallActor;
+  for (var actor of state.actors) {
+    if (actor.type == "movingWall") {
+      movingWallActor = actor;
+    }
+  }
+  let fakeySpeed = this.speed.y + time * gravity;
+  let fake = this.pos.plus(new Vec(0, fakeySpeed * time));
+  if(overlap2(fake, this.size, movingWallActor)) {
+    if (movingWallRight) {
+      this.pos = this.pos.plus(new Vec(0.1, 0));
 
-  let xSpeed = 0;
+    }
+    if (!movingWallRight) {
+      this.pos = this.pos.plus(new Vec(-0.1, 0));
+    }
+  }
+  //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    let xSpeed = 0;
   if (keys.ArrowLeft) {
     xSpeed -= playerXSpeed;
     playerFacedRight = false;
+    //state.style.backgroundImage = "url('./player.jpg')";
   }  
   if (keys.ArrowRight) {
     xSpeed += playerXSpeed;
     playerFacedRight = true;
+   // this.style.backgroundImage = "url('./playerL.jpg')";
   } 
   let pos = this.pos;
   let movedX = pos.plus(new Vec(xSpeed * time, 0));
-  if (!state.level.touches(movedX, this.size, "wall")) {
+  if (!(state.level.touches(movedX, this.size, "wall")) || ((overlap(this, movingWallActor)))) { //new Player(pos.plus(new Vec(xSpeed * time, 0)), this.speed)
     pos = movedX;
   }
-
   let ySpeed = this.speed.y + time * gravity;
   let movedY = pos.plus(new Vec(0, ySpeed * time));
-  // jeszcze przed wykonaniem skoku sprawdzamy czy sa sciany nad playerem. jak nie ma to wykorzystujemy nowa pozycje
-  if (!state.level.touches(movedY, this.size, "wall")) {
-    pos = movedY;
-  // jesli jest wcisnieta strzalka i spda w dół Yspeed > 0 to ustawia speed na ujemny zeby nie mozna było skoczyc spadajac  
-  } else if (keys.ArrowUp && ySpeed > 0) {
+  let playerPos = this.pos;
+  // jeszcze przed wykonaniem skoku sprawdzamy czy player bedzie dotykac scian. jak nie to wykorzystujemy nowa pozycje
+  if (!((state.level.touches(movedY, this.size, "wall")) || (overlap2(movedY, this.size, movingWallActor)))) { //(overlap(new Player(this.pos.plus(new Vec(0, ySpeed * time)), this.speed), movingWallActor))))
+    pos =  movedY; 
+  // jesli jest wcisnieta strzalka i spda w dol Yspeed > 0 to ustawia speed na ujemny zeby nie mozna było skoczyc spadajac  
+  }else if (keys.ArrowUp && ySpeed > 0) {
     ySpeed = -jumpSpeed;
     // w cos uderzyl i speed rowne zero
-  } else {
+  } 
+  else {  
     ySpeed = 0;
-  }
+  } 
   return new Player(pos, new Vec(xSpeed, ySpeed));
 };
 
@@ -567,7 +698,8 @@ async function runGame(plans, Display) {
                                     Display);
         if (status == "won") level++;
       }
-      console.log("You've won!");
+      confirm("You've won!");
+      window.location.replace("./index.html");
 }
 function createMessage(){
   var div = document.createElement("div");
@@ -577,6 +709,16 @@ function createMessage(){
 function message(a){
   var g = document.getElementById("textArea");
   g.innerHTML = a;
+}
+
+function checkingLives() {
+  --lives;
+  message(`Lives:  ${lives}`);
+  if(lives === 0) {
+    confirm("game over");
+    document.body.remove();
+    window.location.replace("./index.html");
+  }
 }
 let lives = 3;
 

@@ -14,6 +14,6 @@ function checkform()
 
 function onSkelClick() 
 {	
-	var info = "Sterowanie: lewo: <- , prawo: -> , skok: spacja";	
+	var info = "Sterowanie: strzalki , atak: spacja, cel: zbierz wszystkie monety";	
 	confirm(info);
 };

@@ -3,7 +3,7 @@ body {
 }
 
 .background { 
-    background: rgb(52, 166, 251);
+    background: url("./wall2.jpg");
     table-layout: fixed;
     border-spacing: 0;              
 }
@@ -13,11 +13,15 @@ body {
 }
 
 .lava { 
-    background: url("./lava.jpg"); 
+    background: url("./kolce.jpg"); 
 }
 
 .wall { 
     background: url("./wall.jpg");             
+}
+
+.movingWall {
+    background: url("./wall.jpg");  
 }
 
 .actor { 
@@ -30,12 +34,16 @@ body {
 }
 
 .bonus { 
-    background: green; 
+    background: url("./heart.jpg"); 
     border-radius: 8px;
 }
 
+
 .player { 
-    background: rgb(64, 64, 64);   
+    background: url("./player.jpg");   
+}
+.playerL { 
+    background: url("./playerL.jpg");   
 }
 
 .lost .player {
@@ -51,6 +59,10 @@ body {
     max-width: 1000px;
     max-height: 800px;
     position: relative;
+}
+
+.hidden {
+    background-image: url("./hidden.jpg");
 }
 
 #textArea {
@@ -73,6 +85,6 @@ color: greenyellow;
 
 
 .ball {
-    background: rgb(34, 13, 224); 
+    background: rgb(7, 238, 96); 
     border-radius: 5px;
 }
