@@ -1,17 +1,16 @@
-
 'use strict';
 
-let GAME_LEVELS = [/*
+var GAME_PLANS = [
 `
 b.....................
-..#................#..
-..##.............=.#..
-..#.........o.o....#..
-..#.@......#####...#..
-..#####............#..
-......#++++++++++++#..
-......##############..
-......................` ,*/
+.#................#...
+.#................#...
+.#??...?...o.o....#...
+.#..?......#####...#..
+.#.................#..
+.#.@....?..........#..
+.###################..
+......................` ,
 `
 ..................................................#......b..#
 #...........................................................#
@@ -22,13 +21,13 @@ b.....................
 #........................o..................................#
 #.......................#####...............#..M.......#....#
 #............................................##########.....#
-#...o.............................o.........................#
-#.#####.........................###......................?x##
-#.........................................................?##
-#...........................................................#
-#.....................................................#@.?..#
-#.................................#....._..#...._....########
-#+++++++++++++++++++++++++++++++++#........#........##++++++#
+#...o.......................................................#
+#.#####...................................................x##
+#..........................................................##
+#.....................................................@.....#
+#.....................................................#_....#
+#...........................#._...#....._..#...._....########
+#+++++++++++++++++++++++++++#######........#........##++++++#
 #############################################################
 `];
 
@@ -159,10 +158,10 @@ Lava.prototype.size = new Vec(1, 1);
 // moving wall
 
 class MovingWall {
-  constructor(pos, speed, reset) {
+  constructor(pos, speed) {
     this.pos = pos;
     this.speed = speed;
-    this.reset = reset;
+    //this.reset = reset;
   }
 
   get type() { return "movingWall"; }
@@ -194,6 +193,24 @@ class Coin {
   
 Coin.prototype.size = new Vec(0.6, 0.6);
 
+class Ammo {
+  constructor(pos, basePos, wobble) {
+    this.pos = pos;
+    this.basePos = basePos;
+    this.wobble = wobble;
+  }
+
+  get type() {return "ammo";}
+
+  static create(pos) {
+    let basePos = pos.plus(new Vec(0.2, 0.1));
+    return new Ammo(basePos, basePos,
+                    Math.random() * Math.PI * 2);
+  }
+}
+
+Ammo.prototype.size = new Vec(0.6, 0.6);
+
 class Bonus {
   constructor(pos, size) {
     this.pos = pos;
@@ -210,14 +227,15 @@ class Bonus {
 //Bonus.prototype.size = new Vec(0.8, 0.8);
 
 class Hidden {
-  constructor(pos) {
+  constructor(pos, touchedStatus) {
     this.pos = pos;
+    this.touchedStatus = touchedStatus;
   }
 
   get type() { return "hidden"; }
 
-  static create(pos) {
-    return new Hidden(pos);
+  static create(pos, touchedStatus) {
+    return new Hidden(pos, false);
   }
 }
 
@@ -227,7 +245,7 @@ Hidden.prototype.size = new Vec(1, 1);
 
 const levelChars = {
     ".": "empty", "#": "wall", "+": "lava", "_": MovingWall,
-    "@": Player, "o": Coin, "x": Bonus, "M": Monster, "b": Ball, "?": Hidden,
+    "@": Player, "o": Coin, "x": Bonus, "M": Monster, "b": Ball, "?": Hidden, "A": Ammo,
     "=": Lava, "|": Lava, "v": Lava
 };
 
@@ -253,8 +271,9 @@ class DOMDisplay {
       this.dom = elt("div", {class: "game"}, drawGrid(level));
       this.actorLayer = null;
       parent.appendChild(this.dom);
-	    createMessage();
-      message(`Lives:  ${lives}`);
+      message("textArea", `Lives:  ${lives}`);
+      message("ammoArea", `Ammunition:  ${ammunition}`);
+      message("coinsArea", `Coins:  ${coins}`);
     }
   
     clear() { this.dom.remove(); }
@@ -262,6 +281,7 @@ class DOMDisplay {
 
 const scale = 20;
 
+// tworzy tabele, w ktorej komorkach przechowywane jest pole empty (tlo)
 function drawGrid(level) {
     return elt("table", {
       class: "background",
@@ -281,6 +301,15 @@ function drawActors(actors) {
       rect.style.height = `${actor.size.y * scale}px`;
       rect.style.left = `${actor.pos.x * scale}px`;
       rect.style.top = `${actor.pos.y * scale}px`;
+      // zmiana animacji gracza
+      if ((actor.type == "player" || actor.type == "playerL") && playerFacedRight){
+        rect.className = "actor player";
+      } else if ((actor.type == "player" || actor.type == "playerL") && !playerFacedRight) {
+        rect.className = " actor playerL";
+      }
+      if (actor.type == "hidden" && actor.touchedStatus) {
+        rect.className = "actor hiddenTouched";
+      }
       return rect;
     }));
 }
@@ -368,6 +397,9 @@ State.prototype.update = function(time, keys) {
       if (movingBall ==true && actor.type == "ball") {
       return actor.collideWithEnemy(newState);
       }
+      if (actor.type == "hidden") {
+        newState =  actor.collideFromBottom(newState);
+      }
       if (actor != player && overlap(actor, player)) {
         newState = actor.collide(newState);
       }
@@ -384,7 +416,7 @@ function overlap(actor1, actor2) {
            actor1.pos.y <= actor2.pos.y + actor2.size.y;
 }
 
-//funkcja pomocnicza. Overlap przyjmuje 2 aktorow, wiec zeby ja wykorzystac musialbym czasami tworzyc nowe instacje
+//funkcja pomocnicza. Overlap przyjmuje 2 aktorow, wiec zeby ja wykorzystac musialbym czasami tworzyc nowe instacje (np. playera)
 // overlap2 przyjmuje pos i size zamiast obiektu, przez co latwiej cos do niej przekazac.
 function overlap2(pos, size, actor2) {
   return pos.x + size.x > actor2.pos.x &&
@@ -392,7 +424,6 @@ function overlap2(pos, size, actor2) {
          pos.y + size.y >= actor2.pos.y &&
          pos.y <= actor2.pos.y + actor2.size.y;
 }
-
 
 // zmiana statusu jak aktorzy sie dotykaja. 1 lava-player, 2. coin-player
 
@@ -407,12 +438,21 @@ MovingWall.prototype.collide = function(state) {
  };
   
 Coin.prototype.collide = function(state) {
+  checkingCoins();
     let filtered = state.actors.filter(a => a != this);
     let status = state.status;
     // jesli nie znajdze wsrod aktorow coina to znaczy ze ich wiecej nie ma i status zmienia na won
     if (!filtered.some(a => a.type == "coin")) status = "won";
     return new State(state.level, filtered, status);
-  return state;
+};
+
+Ammo.prototype.collide = function(state) {
+  let filtered = state.actors.filter(a => a != this);
+  let status = state.status;
+  // jesli nie znajdze wsrod aktorow coina to znaczy ze ich wiecej nie ma i status zmienia na won
+  ammunition = ammunition +2;
+  checkingAmmunition();
+  return new State(state.level, filtered, status);
 };
 
 Bonus.prototype.collide = function(state) {
@@ -424,18 +464,45 @@ Bonus.prototype.collide = function(state) {
 };
 
 Hidden.prototype.collide = function(state) {
+  //let playerPosY = state.player.pos.y;
+ // let playerPosX = state.player.pos.x;
+ // let hiddens = state.actors.filter(a => a.type == "hidden");
+ // for (let hidden of hiddens) {
+ //   if (playerPosY - 0.22 > this.pos.y + this.size.y/2 && playerPosY - 0.22 < this.pos.y + this.size.y &&
+  //     ((playerPosX > this.pos.x - this.size.x/2 )&& (playerPosX < this.pos.x + this.size.x/2))) {
+  //    let filtered = state.actors.filter(a => a != this);
+  //    console.log("touched hidden2");
+ //     return new State(state.level, filtered, state.status);
+ //   }
+ // }
+  return state;
+};
+
+Hidden.prototype.collideFromBottom = function(state) {
   let playerPosY = state.player.pos.y;
   let playerPosX = state.player.pos.x;
-  if (playerPosY > this.pos.y && ((playerPosX > this.pos.x + 0.01)||(playerPosX < this.pos.x - 0.01))) {
-    let filtered = state.actors.filter(a => a != this);
-    return new State(state.level, filtered, state.status);
-  } else if (playerPosY < this.pos.y) {
-    state.player.pos.y = this.pos.y - state.player.size.y;
-    return state;
-  }     
-  else {
-    return state;
+  let hiddens = state.actors.filter(a => a.type == "hidden");
+  for (let hidden of hiddens) {
+    if (playerPosY - 0.22 > this.pos.y + this.size.y/2 && playerPosY - 0.22 < this.pos.y + this.size.y &&
+       ((playerPosX > this.pos.x - this.size.x/2 )&& (playerPosX < this.pos.x + this.size.x/2))) {
+         state.player.pos.y = state.player.pos.y;
+         if (this.touchedStatus === false) chance();
+         this.touchedStatus = true;
+      //let filtered = state.actors.filter(a => a != this);
+      return new State(state.level, state.actors, state.status);
+    }
   }
+  return state;
+};
+
+function chance(){
+let number = Math.random();
+if (number < 0.2) {
+  ammunition = ammunition + 2;
+  checkingAmmunition();
+} else {
+  checkingCoins();
+} return;
 };
 
 Monster.prototype.collide = function(state) {
@@ -488,11 +555,8 @@ Lava.prototype.update = function(time, state) {
     }
 };
 
-let movingWallRight = false;
 MovingWall.prototype.update = function(time, state) {
   let newPos = this.pos.plus(this.speed.times(time));
-  if (this.speed.x > 0) movingWallRight = true;
-  if (this.speed.x < 0) movingWallRight = false;
   //dopoki wall nie dotknie innego walla to tworzy nowy wall w newPos. Reset to pozycja po zresetowaniu, docelowo = newPos
   if (!state.level.touches(newPos, this.size, "wall")) {
     return new MovingWall(newPos, this.speed, this.reset);  
@@ -513,13 +577,19 @@ Coin.prototype.update = function(time) {
                   this.basePos, wobble);
 };
 
+Ammo.prototype.update = function(time) {
+  let wobble = this.wobble + time * wobbleSpeed;
+  let wobblePos = Math.sin(wobble) * wobbleDist;
+  return new Ammo(this.basePos.plus(new Vec(0, wobblePos)),
+                  this.basePos, wobble);
+};
+
 Bonus.prototype.update = function(time) {
-  // TODO zwiekszajacy sie rozmiar = bijace serce
   return new Bonus(this.pos, this.size);
 };
 
 Hidden.prototype.update = function(time) {
-  return new Hidden(this.pos);
+  return new Hidden(this.pos, this.touchedStatus);
 };
 
 // poruszanie sie monstera
@@ -535,19 +605,22 @@ Monster.prototype.update = function(time, state) {
 }
 var movingBall;
 var directionBallRight;
-let ballSpeed = 400;
+var ballSpeed = 400;
+var checkAmmo = false;
 
 Ball.prototype.update = function(time, state) {
-  if (isSpacepressed()) movingBall = true;
-  //jesli flaga jest false. Ball "chodzi" za playerem
-  
+  isSpacepressed(); 
+  if (checkAmmo) { movingBall = checkingAmmunition();
+    checkAmmo = false;
+  } 
+  //jesli flaga jest false. Ball "chodzi" za playerem  
   if(!movingBall){
     let newPos = state.player.pos.plus(this.speed.times(time));   
     return new Ball(newPos.plus(new Vec(0, 0.5)), this.speed.times(time));
   // jesli falga zmieni sie na true (po nacisnieciu spacji) to kula zaczyna sie ruszac
-  } else if(movingBall){
+  } else if(movingBall){ 
     let newPosWhenRun = this.pos.plus(this.speed.times(time));
-    // dopoki nie uderzy w sciane to aktualizuje pozycje i leci do przodu w prawo albolewo
+    // dopoki nie uderzy w sciane to aktualizuje pozycje i leci do przodu w prawo albo lewo
     if (!state.level.touches(newPosWhenRun, this.size, "wall")) {
       if(directionBallRight) {       
         return new Ball(newPosWhenRun, (new Vec (ballSpeed,0).times(time)));  
@@ -564,16 +637,21 @@ Ball.prototype.update = function(time, state) {
 }
 
 function isSpacepressed() {
-  document.addEventListener('keyup', function(event) {
+  document.addEventListener('keypress', function(event) {
     if (event.key == " ") {
       event.preventDefault();
       if (playerFacedRight) {directionBallRight = true;}
       else if (!playerFacedRight) {directionBallRight = false;}
       movingBall = true;
-      return true;
+      checkAmmo = true;
+      // TODO funkcja zostaje wywolana wiele razy wiec tu nie moze byc
+      //checkingAmmunition();
+      return true;     
     }
-    return false
+    // zwraca false jak zostanie nacisniete cos innego niz spacja
+    return false;
   });
+  return false;
 }
 
 // poruszanie sie playera
@@ -582,49 +660,58 @@ let playerXSpeed = 7;
 let gravity = 30;
 let jumpSpeed = 17;
 let playerFacedRight = true;
+let movingWallActor;
+let hiddenActor;
+
 
 Player.prototype.update = function(time, state, keys) {
-  // TO DO jestproblem, bo biore pod uwqage tylko jeden moving wall - pierwszy, a nie wszystkie
-  let movingWallActor;
-  for (var actor of state.actors) {
-    if (actor.type == "movingWall") {
-      movingWallActor = actor;
-    }
-  }
+  // sprawdzanie ruchu X na ruchomej platformie
   let fakeySpeed = this.speed.y + time * gravity;
   let fake = this.pos.plus(new Vec(0, fakeySpeed * time));
-  if(overlap2(fake, this.size, movingWallActor)) {
-    if (movingWallRight) {
-      this.pos = this.pos.plus(new Vec(0.1, 0));
+  let movingWallsActors = state.actors.filter(a => a.type == "movingWall");
+  let hiddenActors = state.actors.filter(a => a.type == "hidden");
+  //movingWallActor = movingWallsActors[0];
+  if (!movingWallActor) { movingWallActor = new MovingWall(new Vec(0,0), new Vec (0,0));}
+  if (!hiddenActor) { hiddenActor = new Hidden(new Vec(0,0), false);}
 
-    }
-    if (!movingWallRight) {
-      this.pos = this.pos.plus(new Vec(-0.1, 0));
+  for (let actor of hiddenActors) {
+    if (overlap2(fake, this.size, actor)) {
+      hiddenActor = actor;
     }
   }
-  //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    let xSpeed = 0;
+
+  for (let actor of movingWallsActors) {
+    if (overlap2(fake, this.size, actor)) {
+      movingWallActor = actor;
+        if (movingWallActor.speed.x >0) {
+        this.pos = this.pos.plus(new Vec(0.1, 0));
+        }
+      if (movingWallActor.speed.x <0) {
+      this.pos = this.pos.plus(new Vec(-0.1, 0));
+      }
+    }
+  }
+  //spradzanie pozostalych ruchow playera, w tym skoki na ruchomym wallu
+  let xSpeed = 0;
   if (keys.ArrowLeft) {
     xSpeed -= playerXSpeed;
     playerFacedRight = false;
-    //state.style.backgroundImage = "url('./player.jpg')";
   }  
   if (keys.ArrowRight) {
     xSpeed += playerXSpeed;
     playerFacedRight = true;
-   // this.style.backgroundImage = "url('./playerL.jpg')";
   } 
   let pos = this.pos;
   let movedX = pos.plus(new Vec(xSpeed * time, 0));
-  if (!(state.level.touches(movedX, this.size, "wall")) || ((overlap(this, movingWallActor)))) { //new Player(pos.plus(new Vec(xSpeed * time, 0)), this.speed)
+  if (!( (state.level.touches(movedX, this.size, "wall")) || (overlap(this, movingWallActor)) || (overlap2(movedX, this.size, hiddenActor)) ) )     { 
     pos = movedX;
   }
   let ySpeed = this.speed.y + time * gravity;
   let movedY = pos.plus(new Vec(0, ySpeed * time));
   let playerPos = this.pos;
   // jeszcze przed wykonaniem skoku sprawdzamy czy player bedzie dotykac scian. jak nie to wykorzystujemy nowa pozycje
-  if (!((state.level.touches(movedY, this.size, "wall")) || (overlap2(movedY, this.size, movingWallActor)))) { //(overlap(new Player(this.pos.plus(new Vec(0, ySpeed * time)), this.speed), movingWallActor))))
-    pos =  movedY; 
+  if (!((state.level.touches(movedY, this.size, "wall")) || (overlap2(movedY, this.size, movingWallActor)) || (overlap2(movedY, this.size, hiddenActor)) )) { 
+    pos =  movedY;
   // jesli jest wcisnieta strzalka i spda w dol Yspeed > 0 to ustawia speed na ujemny zeby nie mozna było skoczyc spadajac  
   }else if (keys.ArrowUp && ySpeed > 0) {
     ySpeed = -jumpSpeed;
@@ -638,7 +725,7 @@ Player.prototype.update = function(time, state, keys) {
 
 // sledzenie nacisniecia klawiszy = ciagle poruszanie z wcisnietym
 
-function trackKeys(keys) {
+function trackKeys(keys) {  
     let down = Object.create(null);
     function track(event) {
       if (keys.includes(event.key)) {
@@ -672,9 +759,9 @@ function runAnimation(frameFunc) {
 
 // funkcja uruchamiajaca level
 
-function runLevel(level, Display) {
-    let display = new Display(document.body, level);
-    let state = State.start(level);
+function runLevel(plan, Display) {
+    let display = new Display(document.body, plan);
+    let state = State.start(plan);
     let ending = 1;
     return new Promise(resolve => {
       runAnimation(time => {
@@ -695,33 +782,53 @@ function runLevel(level, Display) {
 }
 
 async function runGame(plans, Display) {
-    for (let level = 0; level < plans.length;) {
-        let status = await runLevel(new Level(plans[level]),
+    for (let plan = 0; plan < plans.length;) {
+        let status = await runLevel(new Level(plans[plan]),
                                     Display);
-        if (status == "won") level++;
+        if (status == "won") plan++;
       }
       confirm("You've won!");
       window.location.replace("./index.html");
 }
-function createMessage(){
-  var div = document.createElement("div");
-  div.id = "textArea";
-}
 
-function message(a){
-  var g = document.getElementById("textArea");
-  g.innerHTML = a;
+function message(id, message){
+  var element = document.getElementById(id);
+  element.innerHTML = message;
 }
 
 function checkingLives() {
   --lives;
-  message(`Lives:  ${lives}`);
+  message("textArea", `Lives:  ${lives}`);
   if(lives === 0) {
     confirm("game over");
     document.body.remove();
     window.location.replace("./index.html");
   }
 }
-let lives = 3;
+function checkingAmmunition() {
+  if (ammunition <= 0) {
+  //message("ammoArea", `Ammunition:  ${ammunition}`);
+    return false;
+  } else {
+    --ammunition;
+    message("ammoArea", `Ammunition:  ${ammunition}`);
+    return true;
+  }
+}
+function checkingCoins() {
+  ++coins;
+    message("coinsArea", `Coins:  ${coins}`);
+    if (coins >= 4){
+      coins = 0;
+      message("coinsArea", `Coins:  ${coins}`);
+      lives = lives +2;
+      checkingLives();
+    }
+    return true;
+}
 
-runGame(GAME_LEVELS, DOMDisplay);
+let lives = 3;
+let ammunition = 3;
+let coins = 0;
+
+runGame(GAME_PLANS, DOMDisplay);
