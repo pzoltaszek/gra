@@ -13,7 +13,15 @@ body {
 }
 
 .lava { 
+    background: url("./lava.jpg"); 
+}
+
+.spike {
     background: url("./kolce.jpg"); 
+}
+
+.downSpike {
+    background: url("./downKolce.jpg"); 
 }
 
 .wall { 
@@ -46,11 +54,20 @@ body {
     background: url("./playerL.jpg");   
 }
 
+
 .lost .player {
     background: rgb(160, 64, 64);
 }
 
 .won .player {
+    box-shadow: -4px -7px 8px white, 4px -7px 8px white;
+}
+
+.lost .playerL {
+    background: rgb(160, 64, 64);
+}
+
+.won .playerL {
     box-shadow: -4px -7px 8px white, 4px -7px 8px white;
 }
 
@@ -72,6 +89,10 @@ body {
 .ammo {
     background: rgb(7, 238, 96); 
     border-radius: 6px;
+}
+
+.portal {
+    background: url("./portal.png");
 }
 
 #textArea {

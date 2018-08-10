@@ -2,34 +2,86 @@
 
 var GAME_PLANS = [
 `
-b.....................
-.#................#...
-.#................#...
-.#??...?...o.o....#...
-.#..?......#####...#..
-.#.................#..
-.#.@....?..........#..
-.###################..
-......................` ,
+....................................................................................................
+.########################################??##########################?##############?##############.
+.#................................................................................................#.
+.#................................................................................................#.
+.#................................................................................................#.
+.#.........o............................AAA.....................................#....M..#.......P.#.
+.#.......#?#?#.............#####........###..........................#..........#########......#??#.
+.#................#.......##oo......................................#.............................#.
+.#..@.#...........#..M...###..M.....#..........#...####....#.M.....#........oo....................#.
+.###############################################...#..#....###########.....#################..#####.
+...............................................#+++#..#++++#.........#+++++#...............#++#...b` ,
 `
-..................................................#......b..#
+#############?#?########################???##################
 #...........................................................#
 #...........................................................#
-#...........................................................#
-#............o.o............................................#
-#..........#######..........................................#
-#........................o..................................#
-#.......................#####...............#..M.......#....#
-#............................................##########.....#
-#...o.......................................................#
-#.#####...................................................x##
-#..........................................................##
-#.....................................................@.....#
-#.....................................................#_....#
-#...........................#._...#....._..#...._....########
-#+++++++++++++++++++++++++++#######........#........##++++++#
-#############################################################
-`];
+#.P........................................................x#
+####.........o.o.........................A.................##
+#...........#####.......................###.................#
+#......##....#v#.........o..................................#
+#.......................#####...............#..M.....#......#
+#...........................................##########......#
+#..oo.................................oo....................#
+######...........................#.........................##
+#...................A.......................................#
+#..................###......................................#
+#.........###...###......................................@..#
+#A..........................#..M..#........#...........######
+#o...........#.#............#######....M...#...._.....#######
+##++###++++++#=#++++++++++++################++++++++++#######b`
+`
+########################
+#......................#
+#......................#
+#......................#
+#......................#
+#x.P...................#
+#####.....#...#........#
+#....................o.#
+#...................####
+#...................YYY#
+#......................#
+#........._............#
+#......................#
+#......................#
+#......................#
+####...................#
+#YYY...................#
+#......................#
+#.............._....#..#
+#+++++++++++++++++++#..#
+######################.#
+#......................#
+#......................#
+#......................#
+#o....................##
+#o.....................#
+#o#.....#.....#........#
+###.....#+++++#........#
+#YY.....#YYYYY#......###
+#....................YY#
+#......................#
+#...#_.................#
+#......................#
+#?.....................#
+#......................#
+#......................#
+#......................#
+#####+++++++#.#........#
+#YY..#######.........#?#
+#......................#
+#o.....................#
+####................####
+#YYY.......A........YYY#
+#......................#
+#....o...........o.....#
+#....##....@....###....#
+#.........###..........#
+#++++++++++++++++++++++#b
+`
+];
 
 // konstruktor poziomu
 class Level {
@@ -224,7 +276,19 @@ class Bonus {
   }
 }
 
-//Bonus.prototype.size = new Vec(0.8, 0.8);
+class Portal {
+  constructor(pos, size) {
+    this.pos = pos;
+    this.size = size;
+  }
+
+  get type() { return "portal"; }
+
+  static create(pos, size) {
+    return new Portal(pos.plus(new Vec(0, -0.5)), new Vec(1.05, 1.5));
+  }
+}
+
 
 class Hidden {
   constructor(pos, touchedStatus) {
@@ -244,8 +308,8 @@ Hidden.prototype.size = new Vec(1, 1);
 // typy blokow
 
 const levelChars = {
-    ".": "empty", "#": "wall", "+": "lava", "_": MovingWall,
-    "@": Player, "o": Coin, "x": Bonus, "M": Monster, "b": Ball, "?": Hidden, "A": Ammo,
+    ".": "empty", "#": "wall", "+": "spike", "Y": "downSpike", "_": MovingWall,
+    "@": Player, "o": Coin, "x": Bonus, "M": Monster, "b": Ball, "?": Hidden, "A": Ammo, "P": Portal,
     "=": Lava, "|": Lava, "v": Lava
 };
 
@@ -275,13 +339,12 @@ class DOMDisplay {
       message("ammoArea", `Ammunition:  ${ammunition}`);
       message("coinsArea", `Coins:  ${coins}`);
     }
-  
     clear() { this.dom.remove(); }
 }
 
 const scale = 20;
 
-// tworzy tabele, w ktorej komorkach przechowywane jest pole empty (tlo)
+// tworzy tabele, w ktorej komorkach przechowywane sa pola empty (tlo) lub wall (nie aktorzy)
 function drawGrid(level) {
     return elt("table", {
       class: "background",
@@ -307,8 +370,12 @@ function drawActors(actors) {
       } else if ((actor.type == "player" || actor.type == "playerL") && !playerFacedRight) {
         rect.className = " actor playerL";
       }
+      //zmiana znaku zapytania na wykorzystany
       if (actor.type == "hidden" && actor.touchedStatus) {
         rect.className = "actor hiddenTouched";
+      }
+      if (actor.type == "ball" && !movingBall) {
+        rect.className = "";
       }
       return rect;
     }));
@@ -339,7 +406,7 @@ DOMDisplay.prototype.scrollPlayerIntoView = function(state) {
     // centrum pozycji playera = jego pozycja  plus polowa jego wielkosci razy skala (zeby nie pokazalo w pikselach)
     let center = player.pos.plus(player.size.times(0.5))
                            .times(scale);
-  
+    // marginesy aby ekran caly czas sie nie przesuwal jak zwariowany
     if (center.x < left + margin) {
       this.dom.scrollLeft = center.x - margin;
     } else if (center.x > right - margin) {
@@ -354,7 +421,7 @@ DOMDisplay.prototype.scrollPlayerIntoView = function(state) {
 
 // ************* RUCH I KOLIZJE  ***********************
 
-// metoda sparawdzajaca czy element (z listy level = nie aktor = sciana  i lava stojaca) dotyka siatki elementow
+// metoda sparawdzajaca czy element zostal dotkniety
 
 Level.prototype.touches = function(pos, size, type) {
     var xStart = Math.floor(pos.x);
@@ -387,7 +454,8 @@ State.prototype.update = function(time, keys) {
     
     // player dotyka lavy stojacej (+) - przegrywa
     
-    if (this.level.touches(this.player.pos, this.player.size, "lava")) {
+    if (this.level.touches(this.player.pos, this.player.size, "lava")|| this.level.touches(this.player.pos, this.player.size, "spike")
+  || this.level.touches(this.player.pos, this.player.size, "downSpike")) {
      checkingLives();
       return new State(this.level, actors, "lost");
     }
@@ -415,14 +483,22 @@ function overlap(actor1, actor2) {
            actor1.pos.y + actor1.size.y >= actor2.pos.y &&
            actor1.pos.y <= actor2.pos.y + actor2.size.y;
 }
+function overlapX(pos, size, actor2) {
+  return pos.x + size.x+0.2 > actor2.pos.x &&
+         pos.x < actor2.pos.x + actor2.size.x+0.2 &&
+         pos.y + size.y > actor2.pos.y &&
+         pos.y < actor2.pos.y + actor2.size.y;
+}
 
 //funkcja pomocnicza. Overlap przyjmuje 2 aktorow, wiec zeby ja wykorzystac musialbym czasami tworzyc nowe instacje (np. playera)
-// overlap2 przyjmuje pos i size zamiast obiektu, przez co latwiej cos do niej przekazac.
-function overlap2(pos, size, actor2) {
-  return pos.x + size.x > actor2.pos.x &&
-         pos.x < actor2.pos.x + actor2.size.x &&
-         pos.y + size.y >= actor2.pos.y &&
-         pos.y <= actor2.pos.y + actor2.size.y;
+// overlap2 przyjmuje pos i size zamiast obiektu, przez co latwiej cos do niej przekazac. np pos ktora ma byc skoku,a nie aktualna playera
+function overlapY(pos, size, actor2) {
+  // prawa
+  return pos.x + size.x+0.1 >= actor2.pos.x &&
+  //lewa
+         pos.x < actor2.pos.x  + actor2.size.x+0.1  &&
+         pos.y + size.y+0.1 >= actor2.pos.y &&
+         pos.y <= actor2.pos.y + actor2.size.y+0.1;
 }
 
 // zmiana statusu jak aktorzy sie dotykaja. 1 lava-player, 2. coin-player
@@ -432,7 +508,7 @@ Lava.prototype.collide = function(state) {
     return new State(state.level, state.actors, "lost");
 };
 
-//cala logika kolidacji z movingwall jest w ruchu playera
+//cala logika kolidacji z movingwall jest w ruchu playera, bo po kolizji, to player zmienia swoje parametry
 MovingWall.prototype.collide = function(state) {
     return state;
  };
@@ -440,57 +516,41 @@ MovingWall.prototype.collide = function(state) {
 Coin.prototype.collide = function(state) {
   checkingCoins();
     let filtered = state.actors.filter(a => a != this);
-    let status = state.status;
-    // jesli nie znajdze wsrod aktorow coina to znaczy ze ich wiecej nie ma i status zmienia na won
-    if (!filtered.some(a => a.type == "coin")) status = "won";
-    return new State(state.level, filtered, status);
+    return new State(state.level, filtered, state.status);
 };
 
 Ammo.prototype.collide = function(state) {
   let filtered = state.actors.filter(a => a != this);
-  let status = state.status;
-  // jesli nie znajdze wsrod aktorow coina to znaczy ze ich wiecej nie ma i status zmienia na won
   ammunition = ammunition +2;
   checkingAmmunition();
-  return new State(state.level, filtered, status);
+  return new State(state.level, filtered, state.status);
 };
 
 Bonus.prototype.collide = function(state) {
   let filtered = state.actors.filter(a => a != this);
-  let status = state.status;
   lives = lives +2;
   checkingLives();
   return new State(state.level, filtered, state.status);
 };
 
+Portal.prototype.collide = function(state) {
+  return new State(state.level, state.actors, "won");
+};
+
+//jak przy moving wall
 Hidden.prototype.collide = function(state) {
-  //let playerPosY = state.player.pos.y;
- // let playerPosX = state.player.pos.x;
- // let hiddens = state.actors.filter(a => a.type == "hidden");
- // for (let hidden of hiddens) {
- //   if (playerPosY - 0.22 > this.pos.y + this.size.y/2 && playerPosY - 0.22 < this.pos.y + this.size.y &&
-  //     ((playerPosX > this.pos.x - this.size.x/2 )&& (playerPosX < this.pos.x + this.size.x/2))) {
-  //    let filtered = state.actors.filter(a => a != this);
-  //    console.log("touched hidden2");
- //     return new State(state.level, filtered, state.status);
- //   }
- // }
   return state;
 };
 
 Hidden.prototype.collideFromBottom = function(state) {
   let playerPosY = state.player.pos.y;
   let playerPosX = state.player.pos.x;
-  let hiddens = state.actors.filter(a => a.type == "hidden");
-  for (let hidden of hiddens) {
-    if (playerPosY - 0.22 > this.pos.y + this.size.y/2 && playerPosY - 0.22 < this.pos.y + this.size.y &&
-       ((playerPosX > this.pos.x - this.size.x/2 )&& (playerPosX < this.pos.x + this.size.x/2))) {
-         state.player.pos.y = state.player.pos.y;
-         if (this.touchedStatus === false) chance();
-         this.touchedStatus = true;
-      //let filtered = state.actors.filter(a => a != this);
-      return new State(state.level, state.actors, state.status);
-    }
+  if (playerPosY - 0.22 > this.pos.y + this.size.y/2 && playerPosY - 0.22 < this.pos.y + this.size.y &&
+    ((playerPosX > this.pos.x - this.size.x/2 )&& (playerPosX < this.pos.x + this.size.x/2))) {
+    state.player.pos.y = state.player.pos.y;
+    if (this.touchedStatus === false) chance();
+    this.touchedStatus = true;
+    return new State(state.level, state.actors, state.status);
   }
   return state;
 };
@@ -533,7 +593,7 @@ Ball.prototype.collideWithEnemy = function (state) {
       return new State(state.level, filtered, state.status);
     }
    }
-   return state;    
+   return state;
 }
 
 // *************************** UPDATE Aktorow*******************************
@@ -557,10 +617,10 @@ Lava.prototype.update = function(time, state) {
 
 MovingWall.prototype.update = function(time, state) {
   let newPos = this.pos.plus(this.speed.times(time));
-  //dopoki wall nie dotknie innego walla to tworzy nowy wall w newPos. Reset to pozycja po zresetowaniu, docelowo = newPos
+  //dopoki nie dotknie innego sciany to robi update.
   if (!state.level.touches(newPos, this.size, "wall")) {
-    return new MovingWall(newPos, this.speed, this.reset);  
-    // jesli jest wall na drodze, to lava wraca do poczatku => reset = pos - to dla lavy kapiacej
+    return new MovingWall(newPos, this.speed);  
+    // jesli jest wall na drodze, to odbija sie i porusza sie z ujemna predkoscia
   } else {
     return new MovingWall(newPos, this.speed.times(-1));
     
@@ -584,11 +644,15 @@ Ammo.prototype.update = function(time) {
                   this.basePos, wobble);
 };
 
-Bonus.prototype.update = function(time) {
+Bonus.prototype.update = function() {
   return new Bonus(this.pos, this.size);
 };
 
-Hidden.prototype.update = function(time) {
+Portal.prototype.update = function() {
+  return new Portal(this.pos, this.size);
+};
+
+Hidden.prototype.update = function() {
   return new Hidden(this.pos, this.touchedStatus);
 };
 
@@ -598,7 +662,7 @@ Monster.prototype.update = function(time, state) {
   let newPos = this.pos.plus(this.speed.times(time));
     if (!state.level.touches(newPos, this.size, "wall")) {
       return new Monster(newPos, this.speed);
-      // jesli jest wall na drodze, to monstera odbija sie
+      // jesli jest wall na drodze, to monster odbija sie
     } else {
       return new Monster(this.pos, this.speed.times(-1));
     } 
@@ -607,19 +671,22 @@ var movingBall;
 var directionBallRight;
 var ballSpeed = 400;
 var checkAmmo = false;
+var shotAllowed = true;
 
+//lecace pilki
 Ball.prototype.update = function(time, state) {
   isSpacepressed(); 
   if (checkAmmo) { movingBall = checkingAmmunition();
     checkAmmo = false;
   } 
-  //jesli flaga jest false. Ball "chodzi" za playerem  
+  //jesli flaga jest false. Ball "chodzi" za playerem
   if(!movingBall){
-    let newPos = state.player.pos.plus(this.speed.times(time));   
-    return new Ball(newPos.plus(new Vec(0, 0.5)), this.speed.times(time));
+    return new Ball(state.player.pos.plus(new Vec(0, 0.5)), this.speed);
   // jesli falga zmieni sie na true (po nacisnieciu spacji) to kula zaczyna sie ruszac
   } else if(movingBall){ 
     let newPosWhenRun = this.pos.plus(this.speed.times(time));
+    // inaczej kazde nacisniecie spacji powodowaloby zmiejszenie amunicji przy jedej lecacej pilce
+    shotAllowed= false;
     // dopoki nie uderzy w sciane to aktualizuje pozycje i leci do przodu w prawo albo lewo
     if (!state.level.touches(newPosWhenRun, this.size, "wall")) {
       if(directionBallRight) {       
@@ -630,23 +697,22 @@ Ball.prototype.update = function(time, state) {
     // jak uderzy w sciane to znika i przyjmuje pozycje jak player. Flaga ruchu wraca na false  
     } else {
       movingBall = false;
+      shotAllowed= true;
       let newPos = state.player.pos.plus(this.speed.times(time));
-      return new Ball(newPos, this.speed.times(time));
+      return new Ball(newPos, this.speed);
       }
   }
 }
 
 function isSpacepressed() {
   document.addEventListener('keypress', function(event) {
-    if (event.key == " ") {
+    if (event.key == " " && shotAllowed) {
       event.preventDefault();
       if (playerFacedRight) {directionBallRight = true;}
       else if (!playerFacedRight) {directionBallRight = false;}
       movingBall = true;
       checkAmmo = true;
-      // TODO funkcja zostaje wywolana wiele razy wiec tu nie moze byc
-      //checkingAmmunition();
-      return true;     
+      return true;
     }
     // zwraca false jak zostanie nacisniete cos innego niz spacja
     return false;
@@ -660,28 +726,28 @@ let playerXSpeed = 7;
 let gravity = 30;
 let jumpSpeed = 17;
 let playerFacedRight = true;
-let movingWallActor;
-let hiddenActor;
+
 
 
 Player.prototype.update = function(time, state, keys) {
+  let movingWallActor;
+  let hiddenActor;
   // sprawdzanie ruchu X na ruchomej platformie
   let fakeySpeed = this.speed.y + time * gravity;
   let fake = this.pos.plus(new Vec(0, fakeySpeed * time));
   let movingWallsActors = state.actors.filter(a => a.type == "movingWall");
   let hiddenActors = state.actors.filter(a => a.type == "hidden");
-  //movingWallActor = movingWallsActors[0];
   if (!movingWallActor) { movingWallActor = new MovingWall(new Vec(0,0), new Vec (0,0));}
   if (!hiddenActor) { hiddenActor = new Hidden(new Vec(0,0), false);}
 
   for (let actor of hiddenActors) {
-    if (overlap2(fake, this.size, actor)) {
+    if (overlapY(fake, this.size, actor)|| overlapX(fake, this.size, actor)) {
       hiddenActor = actor;
     }
   }
 
   for (let actor of movingWallsActors) {
-    if (overlap2(fake, this.size, actor)) {
+    if (overlapY(fake, this.size, actor)) {
       movingWallActor = actor;
         if (movingWallActor.speed.x >0) {
         this.pos = this.pos.plus(new Vec(0.1, 0));
@@ -703,18 +769,20 @@ Player.prototype.update = function(time, state, keys) {
   } 
   let pos = this.pos;
   let movedX = pos.plus(new Vec(xSpeed * time, 0));
-  if (!( (state.level.touches(movedX, this.size, "wall")) || (overlap(this, movingWallActor)) || (overlap2(movedX, this.size, hiddenActor)) ) )     { 
+  if (!( (state.level.touches(movedX, this.size, "wall")) || (state.level.touches(movedX, this.size, movingWallActor.state)) 
+  || (overlapX(movedX, this.size, hiddenActor)) ) )     { 
     pos = movedX;
   }
   let ySpeed = this.speed.y + time * gravity;
   let movedY = pos.plus(new Vec(0, ySpeed * time));
-  let playerPos = this.pos;
   // jeszcze przed wykonaniem skoku sprawdzamy czy player bedzie dotykac scian. jak nie to wykorzystujemy nowa pozycje
-  if (!((state.level.touches(movedY, this.size, "wall")) || (overlap2(movedY, this.size, movingWallActor)) || (overlap2(movedY, this.size, hiddenActor)) )) { 
+  if (!((state.level.touches(movedY, this.size, "wall")) || (overlapY(movedY, this.size, hiddenActor)) || (overlapY(movedY, this.size, movingWallActor)) )) { 
     pos =  movedY;
   // jesli jest wcisnieta strzalka i spda w dol Yspeed > 0 to ustawia speed na ujemny zeby nie mozna było skoczyc spadajac  
-  }else if (keys.ArrowUp && ySpeed > 0) {
+  }
+  else if (keys.ArrowUp && ySpeed > 0) {
     ySpeed = -jumpSpeed;
+    movedX = pos.x;
     // w cos uderzyl i speed rowne zero
   } 
   else {  
@@ -758,6 +826,7 @@ function runAnimation(frameFunc) {
 }
 
 // funkcja uruchamiajaca level
+// wrzycam tutaj niektore petle, lepiej zeby ladaowaly sie z poziomem niz przy kazdym update
 
 function runLevel(plan, Display) {
     let display = new Display(document.body, plan);
@@ -805,6 +874,7 @@ function checkingLives() {
     window.location.replace("./index.html");
   }
 }
+
 function checkingAmmunition() {
   if (ammunition <= 0) {
   //message("ammoArea", `Ammunition:  ${ammunition}`);
@@ -815,10 +885,11 @@ function checkingAmmunition() {
     return true;
   }
 }
+
 function checkingCoins() {
   ++coins;
     message("coinsArea", `Coins:  ${coins}`);
-    if (coins >= 4){
+    if (coins >= 10){
       coins = 0;
       message("coinsArea", `Coins:  ${coins}`);
       lives = lives +2;
