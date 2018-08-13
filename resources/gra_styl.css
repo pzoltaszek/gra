@@ -1,0 +1,126 @@
+body {
+  background-color:black;
+}
+
+.background {
+  background: url("./wall2.jpg");
+  table-layout: fixed;
+  border-spacing: 0;
+}
+
+.background td {
+  padding: 0;
+}
+
+.lava {
+  background: url("./lava.jpg");
+}
+
+.spike {
+  background: url("./kolce.jpg");
+}
+
+.downSpike {
+  background: url("./downKolce.jpg"); 
+}
+
+.wall {
+  background: url("./wall.jpg");
+}
+
+.movingWall {
+  background: url("./wall.jpg");
+}
+
+.actor { 
+  position: absolute;
+}
+
+.coin { 
+  background: rgb(241, 229, 89);
+  border-radius: 6px;
+}
+
+.bonus { 
+  background: url("./heart.jpg");
+  border-radius: 8px;
+}
+
+
+.player { 
+  background: url("./player.jpg");
+}
+.playerL { 
+  background: url("./playerL.jpg");
+}
+
+
+.lost .player {
+  background: rgb(160, 64, 64);
+}
+
+.won .player {
+  box-shadow: -4px -7px 8px white, 4px -7px 8px white;
+}
+
+.lost .playerL {
+  background: rgb(160, 64, 64);
+}
+
+.won .playerL {
+  box-shadow: -4px -7px 8px white, 4px -7px 8px white;
+}
+
+.game {
+  overflow: hidden;
+  max-width: 1000px;
+  max-height: 800px;
+  position: relative;
+}
+
+.hidden {
+  background-image: url("./hidden.jpg");
+}
+
+.hiddenTouched {
+  background-image: url("./hiddenTouched.jpg");
+}
+
+.ammo {
+  background: rgb(7, 238, 96); 
+  border-radius: 6px;
+}
+
+.portal {
+  background: url("./portal.png");
+}
+
+#textArea {
+  font-size: 20 px;
+  top: 150 px;
+  left: 150 px;
+  color: greenyellow;
+}
+
+#coinsArea {
+  font-size: 20 px;
+  top: 150 px;
+  left: 150 px;
+  color: greenyellow;
+}
+
+#ammoArea {
+  font-size: 20 px;
+  top: 150 px;
+  left: 450 px;
+  color: greenyellow;
+}
+
+.monster {
+  background: url("./monster.jpg");
+}
+
+.ball {
+  background: rgb(7, 238, 96); 
+  border-radius: 5px;
+}
