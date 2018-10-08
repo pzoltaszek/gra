@@ -12,7 +12,7 @@ function checkform() {
 };
 
 function onSkelClick() {
-	var info = "Welcome !!!";
+	var info = "sterowanie: strzalki lewo, prawo, skok:strzalka w gore, strzal: spacja";
 	confirm(info);
 };
 
